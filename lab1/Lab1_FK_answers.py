@@ -18,58 +18,56 @@ def load_motion_data(bvh_file_path):
     return motion_data
 
 
-def recur_cal_joint(joint_lines, joint_name, joint_parent, joint_offsets, parent_index):
+def recur_cal_joint(joint_lines, joint_name, joint_parent, joint_offsets, parent_index, indent_num):
     names = joint_lines[0].split()
     is_end = False
-    if names[0].startswith('JOINT'):
+    if names[0].startswith('JOINT') or names[0].startswith('ROOT'):
         name = names[1]
     else:
         name = joint_name[parent_index] + '_end'
         is_end = True
 
+    # name
     joint_name.append(name)
-    joint_parent.append(parent_index)
-
+    # offset
     offsets = joint_lines[2].split()
     joint_offsets.extend([float(x) for x in offsets[1:]])
-
+    # parent index
+    joint_parent.append(parent_index)
     parent_index = len(joint_name) - 1
-
+    # find child problem
     if not is_end:
-        lines = joint_lines[4:]
-        recur_cal_joint(lines, joint_name, joint_parent, joint_offsets, parent_index)
+        joint_start_nums = []
+        for i in range(len(joint_lines)):
+            if joint_lines[i].find('JOINT') == indent_num or \
+                    joint_lines[i].find('End') == indent_num:
+                joint_start_nums.append(i)
+        joint_start_nums.append(len(joint_lines))
+        indent_num += 4
+
+        for i in range(len(joint_start_nums) - 1):
+            start = joint_start_nums[i]
+            end = joint_start_nums[i + 1]
+            lines = joint_lines[start: end]
+            recur_cal_joint(lines, joint_name, joint_parent, joint_offsets, parent_index, indent_num)
+
 
 def load_hierarchy_data(bvh_file_path):
     joint_name = []
     joint_parent = []
     joint_offsets = []
 
-    root_pos = 0
-    joint_pos_list = []
     with open(bvh_file_path, 'r') as f:
         lines = f.readlines()
         for i in range(len(lines)):
             if lines[i].startswith('ROOT'):
                 root_pos = i
-            elif lines[i].startswith('    JOINT'):
-                joint_pos_list.append(i)
             elif lines[i].startswith('}'):
-                joint_pos_list.append(i - 1)
+                end_pos = i + 1
+                break
 
-        root_name = lines[root_pos].split()[1]
-        joint_name.append(root_name)
-        joint_parent.append(-1)
-        offsets = lines[root_pos + 2].split()
-        joint_offsets.extend([float(x) for x in offsets[1:]])
-
-        for j in range(0, len(joint_pos_list) - 1, 1):
-            start = joint_pos_list[j]
-            end = joint_pos_list[j + 1] - 1
-            joint_lines = lines[start:end]
-            parent_index = 0
-
-            # recursive calc joints
-            recur_cal_joint(joint_lines, joint_name, joint_parent, joint_offsets, parent_index)
+        joint_lines = lines[root_pos:end_pos]
+        recur_cal_joint(joint_lines, joint_name, joint_parent, joint_offsets, -1, 4)
 
     joint_offset = np.array(joint_offsets).reshape(-1, 3)
     return joint_name, joint_parent, joint_offset

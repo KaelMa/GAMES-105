@@ -105,10 +105,45 @@ def part2_forward_kinematics(joint_name, joint_parent, joint_offset, motion_data
     Tips:
         1. joint_orientations的四元数顺序为(x, y, z, w)
     """
-    joint_positions = None
-    joint_orientations = None
-    return joint_positions, joint_orientations
 
+    length = len(joint_name)
+    init_value = R.identity(length).as_quat()
+    joint_orientations = np.asarray(init_value, dtype=np.float64)
+    joint_positions = np.empty((length, 3), dtype=np.float64)
+
+    # orientation
+    for i in range(length):
+        k = 0
+        if joint_name[i].endswith('_end'):
+            r = R.identity()
+        else:
+            start = 3 + k * 3
+            data = motion_data[frame_id, start: start+3]
+            r = R.from_euler('xyz', data, degrees=True)
+            k += 1
+
+        p_index = max(joint_parent[i], 0)
+        p_r = R.from_quat(joint_orientations[p_index])
+        q = p_r * r
+
+        joint_orientations[i] = q.as_quat()
+
+    # position
+    for j in range(length):
+        if j == 0:
+            data = motion_data[frame_id, 0: 3]
+            offset = joint_offset[j]
+            joint_positions[j] = data + offset
+        else:
+            offset = joint_offset[j]
+            p_index = joint_parent[j]
+            p_position = joint_positions[p_index]
+
+            q = R.from_quat(joint_orientations[j]).apply(offset)
+            position = p_position + q
+            joint_positions[j] = position
+
+    return joint_positions, joint_orientations
 
 def part3_retarget_func(T_pose_bvh_path, A_pose_bvh_path):
     """

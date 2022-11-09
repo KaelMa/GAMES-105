@@ -18,6 +18,63 @@ def load_motion_data(bvh_file_path):
     return motion_data
 
 
+def recur_cal_joint(joint_lines, joint_name, joint_parent, joint_offsets, parent_index):
+    names = joint_lines[0].split()
+    is_end = False
+    if names[0].startswith('JOINT'):
+        name = names[1]
+    else:
+        name = joint_name[parent_index] + '_end'
+        is_end = True
+
+    joint_name.append(name)
+    joint_parent.append(parent_index)
+
+    offsets = joint_lines[2].split()
+    joint_offsets.extend([float(x) for x in offsets[1:]])
+
+    parent_index = len(joint_name) - 1
+
+    if not is_end:
+        lines = joint_lines[4:]
+        recur_cal_joint(lines, joint_name, joint_parent, joint_offsets, parent_index)
+
+def load_hierarchy_data(bvh_file_path):
+    joint_name = []
+    joint_parent = []
+    joint_offsets = []
+
+    root_pos = 0
+    joint_pos_list = []
+    with open(bvh_file_path, 'r') as f:
+        lines = f.readlines()
+        for i in range(len(lines)):
+            if lines[i].startswith('ROOT'):
+                root_pos = i
+            elif lines[i].startswith('    JOINT'):
+                joint_pos_list.append(i)
+            elif lines[i].startswith('}'):
+                joint_pos_list.append(i - 1)
+
+        root_name = lines[root_pos].split()[1]
+        joint_name.append(root_name)
+        joint_parent.append(-1)
+        offsets = lines[root_pos + 2].split()
+        joint_offsets.extend([float(x) for x in offsets[1:]])
+
+        for j in range(0, len(joint_pos_list) - 1, 1):
+            start = joint_pos_list[j]
+            end = joint_pos_list[j + 1] - 1
+            joint_lines = lines[start:end]
+            parent_index = 0
+
+            # recursive calc joints
+            recur_cal_joint(joint_lines, joint_name, joint_parent, joint_offsets, parent_index)
+
+    joint_offset = np.array(joint_offsets).reshape(-1, 3)
+    return joint_name, joint_parent, joint_offset
+
+
 
 def part1_calculate_T_pose(bvh_file_path):
     """请填写以下内容
@@ -30,9 +87,12 @@ def part1_calculate_T_pose(bvh_file_path):
     Tips:
         joint_name顺序应该和bvh一致
     """
+
     joint_name = None
     joint_parent = None
     joint_offset = None
+
+    joint_name, joint_parent, joint_offset = load_hierarchy_data(bvh_file_path)
     return joint_name, joint_parent, joint_offset
 
 

@@ -112,8 +112,8 @@ def part2_forward_kinematics(joint_name, joint_parent, joint_offset, motion_data
     joint_positions = np.empty((length, 3), dtype=np.float64)
 
     # orientation
+    k = 0
     for i in range(length):
-        k = 0
         if joint_name[i].endswith('_end'):
             r = R.identity()
         else:
@@ -139,7 +139,7 @@ def part2_forward_kinematics(joint_name, joint_parent, joint_offset, motion_data
             p_index = joint_parent[j]
             p_position = joint_positions[p_index]
 
-            q = R.from_quat(joint_orientations[j]).apply(offset)
+            q = R.from_quat(joint_orientations[p_index]).apply(offset)
             position = p_position + q
             joint_positions[j] = position
 

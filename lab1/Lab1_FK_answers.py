@@ -119,7 +119,7 @@ def part2_forward_kinematics(joint_name, joint_parent, joint_offset, motion_data
         else:
             start = 3 + k * 3
             data = motion_data[frame_id, start: start+3]
-            r = R.from_euler('xyz', data, degrees=True)
+            r = R.from_euler('XYZ', data, degrees=True)
             k += 1
 
         p_index = max(joint_parent[i], 0)

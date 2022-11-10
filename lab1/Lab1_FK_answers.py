@@ -154,5 +154,23 @@ def part3_retarget_func(T_pose_bvh_path, A_pose_bvh_path):
     Tips:
         两个bvh的joint name顺序可能不一致哦(
     """
+
     motion_data = None
+    a_data = load_motion_data(A_pose_bvh_path)
+    a_names, _, _ = load_hierarchy_data(A_pose_bvh_path)
+    t_names, _, _ = load_hierarchy_data(T_pose_bvh_path)
+
+    # joint order
+    motion_data = np.empty(a_data.shape, dtype= np.float64)
+    motion_data[...,0:6] = a_data[...,0:6]
+
+    a_names_no_end = [s for s in a_names if not s.endswith('_end')]
+    t_names_nod_end = [s for s in t_names if not s.endswith('_end')]
+    for i in range(1, size := len(t_names_nod_end)):
+        for j in range(1, size):
+            if t_names_nod_end[i] == a_names_no_end[j]:
+                motion_data[...,3+3*i:6+3*i] = a_data[...,3+3*j:6+3*j]
+                break
+
+    # todo: A Pose to T Pose
     return motion_data

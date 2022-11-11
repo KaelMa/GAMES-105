@@ -149,7 +149,7 @@ def part3_retarget_func(T_pose_bvh_path, A_pose_bvh_path):
     """
     将 A-pose的bvh重定向到T-pose上
     输入: 两个bvh文件的路径
-    输出: 
+    输出:
         motion_data: np.ndarray，形状为(N,X)的numpy数组，其中N为帧数，X为Channel数。retarget后的运动数据
     Tips:
         两个bvh的joint name顺序可能不一致哦(
@@ -172,5 +172,25 @@ def part3_retarget_func(T_pose_bvh_path, A_pose_bvh_path):
                 motion_data[...,3+3*i:6+3*i] = a_data[...,3+3*j:6+3*j]
                 break
 
-    # todo: A Pose to T Pose
+    # A Pose to T Pose
+    l_index = t_names_nod_end.index('lShoulder')
+    ql_ba = R.from_euler('XYZ', [0, 0, -45], degrees=True)
+
+    # lShoulder
+    start = 3 + l_index * 3
+    ra_euler = motion_data[..., start: start+3]
+    ra = R.from_euler('XYZ', ra_euler, degrees=True)
+    rb = (ra * ql_ba).as_euler('XYZ', degrees=True)
+    motion_data[..., start: start+3] = rb
+
+    # rShoulder
+    r_index = t_names_nod_end.index('rShoulder')
+    qr_ba = R.from_euler('XYZ', [0, 0, 45], degrees=True)
+
+    start = 3 + r_index * 3
+    ra_r_euler = motion_data[..., start: start + 3]
+    ra_r = R.from_euler('XYZ', ra_r_euler, degrees=True)
+    rb_r = (ra_r * qr_ba).as_euler('XYZ', degrees=True)
+    motion_data[..., start: start + 3] = rb_r
+
     return motion_data

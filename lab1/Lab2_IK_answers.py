@@ -1,6 +1,38 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+
+def get_nor(v):
+    return v/np.linalg.norm(v)
+
+
+def calc_angle_between_cur_end(joint_positions, joint_orientations, target_pose, path, end_index, cur_index):
+    """
+    CCD计算目标点与End目标点的角度
+    """
+    end_joint = path[end_index]
+    cur_joint = path[cur_index]
+
+    cur_position = joint_positions[cur_joint]
+    end_position = joint_positions[end_joint]
+    # current joint to target vector with end joint to target vector
+    cur_to_end = get_nor(end_position - cur_position)
+    cur_to_target = get_nor(target_pose - cur_position)
+
+    rotation_radius = np.arccos(np.dot(cur_to_end, cur_to_target))
+    rotation_axis = get_nor(np.cross(cur_to_end, cur_to_target))
+    rotation_vector = R.from_rotvec(rotation_radius * rotation_axis)
+
+    for i in range(cur_index, end_index):
+        ii = path[i]
+        ic = path[i + 1]
+        joint_orientations[ii] = (rotation_vector * R.from_quat(joint_orientations[ii])).as_quat()
+        child_offset = joint_positions[ic] - joint_positions[ii]
+        child_offset_new = rotation_vector.apply(child_offset)
+
+        joint_positions[ic] = joint_positions[ii] + child_offset_new
+
+
 def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, target_pose):
     """
     完成函数，计算逆运动学
@@ -14,7 +46,17 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
         joint_positions: 计算得到的关节位置，是一个numpy数组，shape为(M, 3)，M为关节数
         joint_orientations: 计算得到的关节朝向，是一个numpy数组，shape为(M, 4)，M为关节数
     """
-    
+
+    path, path_name, path1, path2 = meta_data.get_path_from_root_to_end()
+    end_joint = meta_data.end_joint
+    end_index = path_name.index(end_joint)
+
+    k = 0
+    while np.linalg.norm(joint_positions[end_index] - target_pose) >= 1e-2 and k <= 1:
+        for i in range(end_index - 1, 0, -1):
+            cur_index = i
+            calc_angle_between_cur_end(joint_positions, joint_orientations, target_pose, path, end_index, cur_index)
+        k += 1
     
     return joint_positions, joint_orientations
 

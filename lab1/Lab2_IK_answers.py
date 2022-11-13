@@ -22,16 +22,21 @@ def calc_angle_between_cur_end(joint_positions, joint_orientations, target_pose,
     rotation_radius = np.arccos(np.dot(cur_to_end, cur_to_target))
     rotation_axis = get_nor(np.cross(cur_to_end, cur_to_target))
     rotation_vector = R.from_rotvec(rotation_radius * rotation_axis)
+    joint_orientations[cur_joint] = (rotation_vector * R.from_quat(joint_orientations[cur_joint])).as_quat()
 
-    for i in range(cur_index, end_index):
-        ii = path[i]
-        ic = path[i + 1]
-        joint_orientations[ii] = (rotation_vector * R.from_quat(joint_orientations[ii])).as_quat()
-        child_offset = joint_positions[ic] - joint_positions[ii]
-        child_offset_new = rotation_vector.apply(child_offset)
+    child_index = cur_index + 1
+    child_joint = path[child_index]
+    child_local = joint_positions[child_joint] - joint_positions[cur_joint]
+    child_local_new = rotation_vector.apply(child_local)
+    joint_positions[child_joint] = joint_positions[cur_joint] + child_local_new
+    child_offset = child_local_new - child_local
 
-        joint_positions[ic] = joint_positions[ii] + child_offset_new
+    for i in range(cur_index + 1, end_index):
+        ic = path[i]
+        # joint_orientations[ic] = (rotation_vector * R.from_quat(joint_orientations[ic])).as_quat()
 
+        icc = path[i + 1]
+        joint_positions[icc] = joint_positions[icc] + child_offset
 
 def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, target_pose):
     """
@@ -52,8 +57,9 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
     end_index = path_name.index(end_joint)
 
     k = 0
-    while np.linalg.norm(joint_positions[end_index] - target_pose) >= 1e-2 and k <= 1:
+    while np.linalg.norm(joint_positions[path[end_index]] - target_pose) >= 1e-2 and k <= 100:
         for i in range(end_index - 1, 0, -1):
+            # from 6 to 1
             cur_index = i
             calc_angle_between_cur_end(joint_positions, joint_orientations, target_pose, path, end_index, cur_index)
         k += 1

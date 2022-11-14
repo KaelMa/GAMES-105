@@ -31,6 +31,23 @@ def calc_angle_between_cur_end(joint_positions, joint_orientations, target_pose,
         joint_positions[icc] = joint_positions[cur_joint] + \
                               rotation_vector.apply(joint_positions[icc] - joint_positions[cur_joint])
 
+
+def fk_update_joints(joint_initial_position, joint_name, joint_parent, path_name,
+                     joint_positions, joint_orientations):
+    length = len(joint_name)
+
+    for i in range(length):
+        if joint_name[i] in path_name:
+            continue
+        r = R.from_quat(joint_orientations[i])
+        p_index = max(joint_parent[i], 0)
+        p_r = R.from_quat(joint_orientations[p_index])
+        q = p_r * r
+
+        joint_orientations[i] = q.as_quat()
+        l_i = joint_initial_position[i] - joint_initial_position[p_index]
+        joint_positions[i] = joint_positions[p_index] + R.from_quat(joint_orientations[i]).apply(l_i)
+
 def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, target_pose):
     """
     完成函数，计算逆运动学
@@ -50,14 +67,17 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
     end_index = path_name.index(end_joint)
 
     k = 0
-    while np.linalg.norm(joint_positions[path[end_index]] - target_pose) >= 1e-2 and k <= 100:
-        for i in range(end_index - 1, 0, -1):
+    while np.linalg.norm(joint_positions[path[end_index]] - target_pose) >= 1e-2 and k <= 20:
+        for i in range(end_index - 1, -1, -1):
             # from 6 to 1
             cur_index = i
             calc_angle_between_cur_end(joint_positions, joint_orientations, target_pose, path, end_index, cur_index)
         k += 1
         print(k)
-    
+
+    fk_update_joints(meta_data.joint_initial_position, meta_data.joint_name, meta_data.joint_parent,
+                     path_name, joint_positions, joint_orientations)
+
     return joint_positions, joint_orientations
 
 def part2_inverse_kinematics(meta_data, joint_positions, joint_orientations, relative_x, relative_z, target_height):

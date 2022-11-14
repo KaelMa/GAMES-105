@@ -22,21 +22,14 @@ def calc_angle_between_cur_end(joint_positions, joint_orientations, target_pose,
     rotation_radius = np.arccos(np.dot(cur_to_end, cur_to_target))
     rotation_axis = get_nor(np.cross(cur_to_end, cur_to_target))
     rotation_vector = R.from_rotvec(rotation_radius * rotation_axis)
-    joint_orientations[cur_joint] = (rotation_vector * R.from_quat(joint_orientations[cur_joint])).as_quat()
 
-    child_index = cur_index + 1
-    child_joint = path[child_index]
-    child_local = joint_positions[child_joint] - joint_positions[cur_joint]
-    child_local_new = rotation_vector.apply(child_local)
-    joint_positions[child_joint] = joint_positions[cur_joint] + child_local_new
-    child_offset = child_local_new - child_local
-
-    for i in range(cur_index + 1, end_index):
+    for i in range(cur_index, end_index):
         ic = path[i]
-        # joint_orientations[ic] = (rotation_vector * R.from_quat(joint_orientations[ic])).as_quat()
+        joint_orientations[ic] = (rotation_vector * R.from_quat(joint_orientations[ic])).as_quat()
 
         icc = path[i + 1]
-        joint_positions[icc] = joint_positions[icc] + child_offset
+        joint_positions[icc] = joint_positions[cur_joint] + \
+                              rotation_vector.apply(joint_positions[icc] - joint_positions[cur_joint])
 
 def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, target_pose):
     """
@@ -63,6 +56,7 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
             cur_index = i
             calc_angle_between_cur_end(joint_positions, joint_orientations, target_pose, path, end_index, cur_index)
         k += 1
+        print(k)
     
     return joint_positions, joint_orientations
 

@@ -48,6 +48,30 @@ def fk_update_joints(joint_initial_position, joint_name, joint_parent, path_name
         l_i = joint_initial_position[i] - joint_initial_position[p_index]
         joint_positions[i] = joint_positions[p_index] + R.from_quat(joint_orientations[i]).apply(l_i)
 
+
+def construct_chains(meta_data, joint_positions, joint_orientations):
+    """
+    按是否通过Root节点构建正向FK链
+    """
+    path, path_name, path1, path2 = meta_data.get_path_from_root_to_end()
+    chain_offsets = np.empty((len(path), 3))
+    chain_orientations = np.empty((len(path), 4))
+
+    for i in range(len(path)):
+        if i == 0:
+            chain_offsets[i] = [0., 0., 0.]
+        else:
+            chain_offsets[i] = joint_positions[path[i]] - joint_positions[path[i - 1]]
+
+    for i in range(len(path2) - 1):
+        chain_orientations[i] = joint_orientations[[path2[i + 1]]]
+    chain_orientations[len(path2) - 1] = joint_orientations[[path2[-1]]]
+    k = len(path2)
+    for j in range(len(path1)):
+        chain_orientations[k + j] = joint_orientations[path1[~1]]
+    return chain_offsets, chain_orientations
+
+
 def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, target_pose):
     """
     完成函数，计算逆运动学
@@ -61,6 +85,8 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
         joint_positions: 计算得到的关节位置，是一个numpy数组，shape为(M, 3)，M为关节数
         joint_orientations: 计算得到的关节朝向，是一个numpy数组，shape为(M, 4)，M为关节数
     """
+
+    construct_chains(meta_data, joint_positions, joint_orientations)
 
     path, path_name, path1, path2 = meta_data.get_path_from_root_to_end()
     end_joint = meta_data.end_joint

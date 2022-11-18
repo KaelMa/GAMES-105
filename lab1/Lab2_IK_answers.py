@@ -27,9 +27,11 @@ def calc_angle_between_cur_end(chain_offset, chain_pos, chain_ori,
                  for i in range(len(chain_ori))]
 
     for i in range(cur_joint + 1, end_joint + 1):
-        if i < end_joint + 1:
-            chain_ori[i] = chain_ori[i - 1] * chain_rot[i]
         chain_pos[i] = chain_pos[i - 1] + chain_ori[i - 1].apply(chain_offset[i])
+        if i < end_joint:
+            chain_ori[i] = chain_ori[i - 1] * chain_rot[i]
+        else:
+            chain_ori[i] = chain_ori[i - 1]
 
     return chain_pos, chain_ori
 
@@ -57,9 +59,9 @@ def fk_update_joints(meta_data, chain_orientations, chain_positions, joint_posit
         if p == -1:
             continue
         if meta_data.joint_name[i] not in path_name:
-            joint_orientations[i] = (R.from_quat(joint_orientations[p]) * joint_rotations[i]).as_quat()
             joint_positions[i] = joint_positions[p] + R.from_quat(joint_orientations[p]).apply(
                 meta_data.joint_initial_position[i] - meta_data.joint_initial_position[p])
+            joint_orientations[i] = (R.from_quat(joint_orientations[p]) * joint_rotations[i]).as_quat()
 
 
 def construct_chains(meta_data, joint_positions, joint_orientations):
@@ -102,7 +104,7 @@ def part1_inverse_kinematics(meta_data, joint_positions, joint_orientations, tar
     end_index = path_name.index(end_joint)
 
     k = 0
-    while np.linalg.norm(joint_positions[path[end_index]] - target_pose) >= 1e-2 and k <= 20:
+    while np.linalg.norm(joint_positions[path[end_index]] - target_pose) >= 1e-2 and k <= 10:
         for i in range(end_index - 1, -1, -1):
             print(path_name[i])
             cur_index = i
@@ -119,7 +121,36 @@ def part2_inverse_kinematics(meta_data, joint_positions, joint_orientations, rel
     """
     输入lWrist相对于RootJoint前进方向的xz偏移，以及目标高度，IK以外的部分与bvh一致
     """
-    
+    chain_offsets, chain_positions, chain_orientations = \
+        construct_chains(meta_data, joint_positions, joint_orientations)
+    target_pose = np.array([joint_positions[0][0] + relative_x, target_height, joint_positions[0][2] + relative_z])
+
+    path, path_name, path1, path2 = meta_data.get_path_from_root_to_end()
+    end_joint = meta_data.end_joint
+    end_index = path_name.index(end_joint)
+
+    k = 0
+    while np.linalg.norm(joint_positions[path[end_index]] - target_pose) >= 1e-2 and k <= 10:
+        for i in range(end_index - 1, -1, -1):
+            print(path_name[i])
+            cur_index = i
+            calc_angle_between_cur_end(chain_offsets, chain_positions, chain_orientations,
+                                       target_pose, end_index, cur_index)
+        k += 1
+        print(k)
+
+    # fk_update_joints(meta_data, chain_orientations, chain_positions, joint_positions, joint_orientations)
+
+    for j in range(len(path)):
+        joint_positions[path[j]] = chain_positions[j]
+        joint_orientations[path[j]] = chain_orientations[j].as_quat()
+
+    i = meta_data.joint_name.index(meta_data.end_joint + "_end")
+    p = meta_data.joint_parent[i]
+    joint_positions[i] = joint_positions[p] + \
+                             R.from_quat(joint_orientations[p]).apply(
+                             meta_data.joint_initial_position[i] - meta_data.joint_initial_position[p])
+
     return joint_positions, joint_orientations
 
 def bonus_inverse_kinematics(meta_data, joint_positions, joint_orientations, left_target_pose, right_target_pose):

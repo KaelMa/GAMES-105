@@ -197,17 +197,34 @@ class BVHMotion():
         pass
     
     #--------------------- 你的任务 -------------------- #
+    def get_nor(self, v):
+        return v / np.linalg.norm(v)
+
+    def get_rotation_from_two_vector(self, p1, p2):
+        v1 = self.get_nor(p1)
+        v2 = self.get_nor(p2)
+        radian = np.arccos(np.clip(np.dot(v1, v2), -1, 1))
+        axis = self.get_nor(np.cross(v1, v2))
+        rotation = R.from_rotvec(radian * axis)
+
+        return rotation
     
     def decompose_rotation_with_yaxis(self, rotation):
         '''
         输入: rotation 形状为(4,)的ndarray, 四元数旋转
         输出: Ry, Rxz，分别为绕y轴的旋转和转轴在xz平面的旋转，并满足R = Ry * Rxz
         '''
-        Ry = np.zeros_like(rotation)
-        Rxz = np.zeros_like(rotation)
-        # TODO: 你的代码
-        
-        return Ry, Rxz
+        r_y = np.zeros_like(rotation)
+        r_xz = np.zeros_like(rotation)
+        # 你的代码
+        y_axis = np.array([0, 1, 0])
+        y_local = R.from_quat(rotation).apply(y_axis)
+        d_r = self.get_rotation_from_two_vector(y_local, y_axis)
+
+        r_y = d_r * rotation
+        r_xz = r_y.inv() * rotation
+
+        return r_y, r_xz
     
     # part 1
     def translation_and_rotation(self, frame_num, target_translation_xz, target_facing_direction_xz):
@@ -225,11 +242,23 @@ class BVHMotion():
         '''
         
         res = self.raw_copy() # 拷贝一份，不要修改原始数据
-        
+
         # 比如说，你可以这样调整第frame_num帧的根节点平移
         offset = target_translation_xz - res.joint_position[frame_num, 0, [0,2]]
         res.joint_position[:, 0, [0,2]] += offset
-        # TODO: 你的代码
+        # 你的代码
+        frame_rot = res.joint_rotation[frame_num, 0]
+        ry, rxz = self.decompose_rotation_with_yaxis(frame_rot)
+        target_rot = self.get_rotation_from_two_vector(np.array([0, 0, 1]), target_facing_direction_xz)
+        r0_y, _ = self.decompose_rotation_with_yaxis(target_rot)
+
+        delta_r = r0_y * ry.inv()
+        r1_y_array, r1_xy_array = self.decompose_rotation_with_yaxis(res.joint_rotation[:, 0, ])
+        res.joint_rotation[:, 0, ] = (delta_r * r1_y_array * r1_xy_array).as_quat()
+
+        res.joint_position[:, 0, [0, 2]]
+        # todo positions
+
         return res
 
 # part2

@@ -198,14 +198,23 @@ class BVHMotion():
     
     #--------------------- 你的任务 -------------------- #
     def get_nor(self, v):
-        return v / np.linalg.norm(v)
+        v[np.isnan(v)] = 0
+        if v.any():
+            return v / np.linalg.norm(v)
+        else:
+            return v
 
     def get_rotation_from_two_vector(self, p1, p2):
+        if p1.shape != p2.shape:
+            raise ValueError("check shape!")
+
         v1 = self.get_nor(p1)
         v2 = self.get_nor(p2)
-        radian = np.arccos(np.clip(np.dot(v1, v2), -1, 1))
+
+        radian = [np.arccos(np.clip(np.dot(v1[i], v2[i]), -1, 1)) for i in range(v1.shape[0])]
         axis = self.get_nor(np.cross(v1, v2))
-        rotation = R.from_rotvec(radian * axis)
+        rot_array = [radian[i] * axis[i] for i in range(len(radian))]
+        rotation = R.from_rotvec(rot_array)
 
         return rotation
     
@@ -219,10 +228,11 @@ class BVHMotion():
         # 你的代码
         y_axis = np.array([0, 1, 0])
         y_local = R.from_quat(rotation).apply(y_axis)
-        d_r = self.get_rotation_from_two_vector(y_local, y_axis)
+        y_vector = np.full(y_local.shape, y_axis)
+        d_r = self.get_rotation_from_two_vector(y_local, y_vector)
 
-        r_y = d_r * rotation
-        r_xz = r_y.inv() * rotation
+        r_y = d_r * R.from_quat(rotation)
+        r_xz = r_y.inv() * R.from_quat(rotation)
 
         return r_y, r_xz
     
@@ -244,20 +254,24 @@ class BVHMotion():
         res = self.raw_copy() # 拷贝一份，不要修改原始数据
 
         # 比如说，你可以这样调整第frame_num帧的根节点平移
-        offset = target_translation_xz - res.joint_position[frame_num, 0, [0,2]]
-        res.joint_position[:, 0, [0,2]] += offset
-        # 你的代码
-        frame_rot = res.joint_rotation[frame_num, 0]
-        ry, rxz = self.decompose_rotation_with_yaxis(frame_rot)
-        target_rot = self.get_rotation_from_two_vector(np.array([0, 0, 1]), target_facing_direction_xz)
-        r0_y, _ = self.decompose_rotation_with_yaxis(target_rot)
+        offset = target_translation_xz - res.joint_position[frame_num, 0, [0, 2]]
+        res.joint_position[:, 0, [0, 2]] += offset
 
+        # 你的代码
+        target_face_direction = np.array([target_facing_direction_xz[0], 0, target_facing_direction_xz[1]])
+        frame_rot = res.joint_rotation[frame_num, 0]
+        ry, _ = self.decompose_rotation_with_yaxis(frame_rot)
+        target_rot = self.get_rotation_from_two_vector(np.array([0, 0, 1]), target_face_direction)
+        r0_y, _ = self.decompose_rotation_with_yaxis(target_rot.as_quat())
+
+        # new rotation
         delta_r = r0_y * ry.inv()
         r1_y_array, r1_xy_array = self.decompose_rotation_with_yaxis(res.joint_rotation[:, 0, ])
         res.joint_rotation[:, 0, ] = (delta_r * r1_y_array * r1_xy_array).as_quat()
 
-        res.joint_position[:, 0, [0, 2]]
-        # todo positions
+        # new position
+        delta_t = res.joint_position[:, 0, ] - res.joint_position[frame_num, 0, ]
+        res.joint_position[:, 0, [0, 2]] = (delta_r.apply(delta_t))[:, [0, 2]] + target_translation_xz
 
         return res
 

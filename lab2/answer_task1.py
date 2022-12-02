@@ -204,21 +204,26 @@ class BVHMotion():
         else:
             return v
 
-    def get_rotation_from_two_vector(self, p1, p2):
+    def get_rotation_from_two_vector(self, p1, p2, single_dimension=True):
         if p1.shape != p2.shape:
             raise ValueError("check shape!")
 
         v1 = self.get_nor(p1)
         v2 = self.get_nor(p2)
 
-        radian = [np.arccos(np.clip(np.dot(v1[i], v2[i]), -1, 1)) for i in range(v1.shape[0])]
-        axis = self.get_nor(np.cross(v1, v2))
-        rot_array = [radian[i] * axis[i] for i in range(len(radian))]
-        rotation = R.from_rotvec(rot_array)
+        if single_dimension:
+            radian = np.arccos(np.clip(np.dot(v1, v2), -1, 1))
+            axis = self.get_nor(np.cross(v1, v2))
+            rot_array = radian*axis
+        else:
+            radian = [np.arccos(np.clip(np.dot(v1[i], v2[i]), -1, 1)) for i in range(v1.shape[0])]
+            axis = self.get_nor(np.cross(v1, v2))
+            rot_array = [radian[i] * axis[i] for i in range(len(radian))]
 
+        rotation = R.from_rotvec(rot_array)
         return rotation
     
-    def decompose_rotation_with_yaxis(self, rotation):
+    def decompose_rotation_with_yaxis(self, rotation, single_dimension=True):
         '''
         输入: rotation 形状为(4,)的ndarray, 四元数旋转
         输出: Ry, Rxz，分别为绕y轴的旋转和转轴在xz平面的旋转，并满足R = Ry * Rxz
@@ -229,7 +234,7 @@ class BVHMotion():
         y_axis = np.array([0, 1, 0])
         y_local = R.from_quat(rotation).apply(y_axis)
         y_vector = np.full(y_local.shape, y_axis)
-        d_r = self.get_rotation_from_two_vector(y_local, y_vector)
+        d_r = self.get_rotation_from_two_vector(y_local, y_vector, single_dimension)
 
         r_y = d_r * R.from_quat(rotation)
         r_xz = r_y.inv() * R.from_quat(rotation)
@@ -266,8 +271,7 @@ class BVHMotion():
 
         # new rotation
         delta_r = r0_y * ry.inv()
-        r1_y_array, r1_xy_array = self.decompose_rotation_with_yaxis(res.joint_rotation[:, 0, ])
-        res.joint_rotation[:, 0, ] = (delta_r * r1_y_array * r1_xy_array).as_quat()
+        res.joint_rotation[:, 0, ] = (delta_r * R.from_quat(res.joint_rotation[:, 0 ,])).as_quat()
 
         # new position
         delta_t = res.joint_position[:, 0, ] - res.joint_position[frame_num, 0, ]

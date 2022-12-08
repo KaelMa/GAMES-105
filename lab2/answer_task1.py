@@ -224,7 +224,7 @@ class BVHMotion():
 
         rotation = R.from_rotvec(rot_array)
         return rotation
-    
+
     def decompose_rotation_with_yaxis(self, rotation, single_dimension=True):
         '''
         输入: rotation 形状为(4,)的ndarray, 四元数旋转

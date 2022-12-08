@@ -298,13 +298,20 @@ def blend_two_motions(bvh_motion1, bvh_motion2, alpha):
 
     # 你的代码
     frames = len(alpha)
+    key_times = []
+    for i in range(res.joint_rotation.shape[1]):
+        key_times.append(2*i)
+        key_times.append(2*i + 1)
+    times = [alpha[i] + i for i in range(res.joint_rotation.shape[1])]
+
     for i in range(frames):
         j = np.around(bvh_motion1.joint_position.shape[0] / frames * i).astype(np.int32)
         k = np.around(bvh_motion2.joint_position.shape[0] / frames * i).astype(np.int32)
         res.joint_position[i] = (1 - alpha[i]) * bvh_motion1.joint_position[j] + alpha[i] * bvh_motion2.joint_position[k]
 
         rotations = np.concatenate([bvh_motion1.joint_rotation[j], bvh_motion2.joint_rotation[k]])
-        res.joint_rotation[i] = Slerp([alpha[i]], R.from_quat(rotations))
+        slerp = Slerp(key_times, R.from_quat(rotations))
+        res.joint_rotation[i] = slerp(times).as_quat()
 
     return res
 

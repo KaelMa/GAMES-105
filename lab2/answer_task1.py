@@ -342,10 +342,15 @@ def concatenate_two_motions(bvh_motion1, bvh_motion2, mix_frame1, mix_time):
     '''
     res = bvh_motion1.raw_copy()
     
-    # TODO: 你的代码
+    # 你的代码
+    pos = bvh_motion1.joint_position[mix_frame1, 0, [0, 2]]
+    rot = bvh_motion1.joint_rotation[mix_frame1, 0]
+    facing_axis = R.from_quat(rot).apply(np.array([0, 0, 1])).flatten()[[0, 2]]
+    new_motion = bvh_motion2.translation_and_rotation(0, pos, facing_axis)
+
     # 下面这种直接拼肯定是不行的(
-    res.joint_position = np.concatenate([res.joint_position[:mix_frame1], bvh_motion2.joint_position], axis=0)
-    res.joint_rotation = np.concatenate([res.joint_rotation[:mix_frame1], bvh_motion2.joint_rotation], axis=0)
+    res.joint_position = np.concatenate([res.joint_position[:mix_frame1], new_motion.joint_position], axis=0)
+    res.joint_rotation = np.concatenate([res.joint_rotation[:mix_frame1], new_motion.joint_rotation], axis=0)
     
     return res
 

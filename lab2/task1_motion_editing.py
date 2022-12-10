@@ -24,7 +24,7 @@ class ShowBVHUpdate():
         if not self.viewer.update_flag:
             return task.cont
         
-        speed_inv = 1 # 控制播放速度的整数,越大越慢
+        speed_inv = 10 # 控制播放速度的整数,越大越慢
         for i in range(len(self.joint_name)):
             self.viewer.set_joint_position_orientation(self.joint_name[i],
                                                        self.translation[self.cur_frame//speed_inv, i, :],
@@ -90,7 +90,7 @@ def part3_build_loop(viewer):
     # Blog名称: Creating Looping Animations from Motion Capture
     motion = BVHMotion('motion_material/run_forward.bvh')
     motion = build_loop_motion(motion)
-    
+
     pos = motion.joint_position[-1,0,[0,2]]
     rot = motion.joint_rotation[-1,0]
     facing_axis = R.from_quat(rot).apply(np.array([0,0,1])).flatten()[[0,2]]
@@ -136,9 +136,9 @@ def main():
     # 请不要同时取消多个注释，否则前者会被后者覆盖
     
     # part1_translation_and_rotation(viewer, 2) # 数字代表不同的测试setting
-    part2_interpolate(viewer, 1) # 数字代表不同期望的前进速度
+    # part2_interpolate(viewer, 1) # 数字代表不同期望的前进速度
     # part3_build_loop(viewer)
-    # part4_concatenate(viewer, 0) # 数字代表不同的测试setting
+    part4_concatenate(viewer, 0) # 数字代表不同的测试setting
     viewer.run()
     
 if __name__ == '__main__':

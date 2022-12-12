@@ -351,22 +351,22 @@ def concatenate_two_motions(bvh_motion1, bvh_motion2, mix_frame1, mix_time):
     new_motion = bvh_motion2.translation_and_rotation(0, pos, facing_axis)
 
     # Inertialization Rotation
-    # rot_diff = (R.from_quat(new_motion.joint_rotation[0]) *
-    #            R.from_quat((bvh_motion1.joint_rotation[mix_frame1]).copy()).inv()).as_rotvec()
-    # avel0 = smooth_utils.quat_to_avel(new_motion.joint_rotation[0], 1/60)
-    # avel1 = smooth_utils.quat_to_avel(bvh_motion1.joint_rotation[mix_frame1], 1/60)
-    # avel_diff = avel0 - avel1
-    half_life = 0.5 * mix_time / new_motion.joint_rotation.shape[0]
-    # for i in range(mix_time):
-    #     offset = smooth_utils.decay_spring_implicit_damping_rot(rot_diff, avel_diff, half_life, i/60)
-    #     new_motion.joint_rotation[i] = (R.from_rotvec(offset[0]) *
-    #                                     R.from_quat(new_motion.joint_rotation[i])).as_quat()
+    half_life = 0.1
+    rot_diff = (R.from_quat(bvh_motion1.joint_rotation[mix_frame1]) *
+               R.from_quat((new_motion.joint_rotation[0]).copy()).inv()).as_rotvec()
+    avel0 = smooth_utils.quat_to_avel(new_motion.joint_rotation[0:2], 1/60)
+    avel1 = smooth_utils.quat_to_avel(bvh_motion1.joint_rotation[mix_frame1:mix_frame1 + 2], 1/60)
+    avel_diff = avel1[0] - avel0[0]
+    for i in range(new_motion.joint_rotation.shape[0]):
+        offset = smooth_utils.decay_spring_implicit_damping_rot(rot_diff, avel_diff, half_life, i/60)
+        new_motion.joint_rotation[i] = (R.from_rotvec(offset[0]) *
+                                        R.from_quat(new_motion.joint_rotation[i])).as_quat()
     
     # Inertialization Position
-    pos_diff = new_motion.joint_position[0] - bvh_motion1.joint_position[mix_frame1]
+    pos_diff = bvh_motion1.joint_position[mix_frame1] - new_motion.joint_position[0]
     vel_diff = pos_diff / 60
 
-    for i in range(mix_time):
+    for i in range(new_motion.joint_rotation.shape[0]):
         offset = smooth_utils.decay_spring_implicit_damping_pos(pos_diff, vel_diff, half_life, i/60)
         new_motion.joint_position[i] += offset[0]
 

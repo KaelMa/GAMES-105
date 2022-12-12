@@ -2,6 +2,8 @@ import numpy as np
 import copy
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
+import smooth_utils
+
 # ------------- lab1里的代码 -------------#
 def load_meta_data(bvh_path):
     with open(bvh_path, 'r') as f:
@@ -342,11 +344,31 @@ def concatenate_two_motions(bvh_motion1, bvh_motion2, mix_frame1, mix_time):
     '''
     res = bvh_motion1.raw_copy()
     
-    # 你的代码
+    # facing frame
     pos = bvh_motion1.joint_position[mix_frame1, 0, [0, 2]]
     rot = bvh_motion1.joint_rotation[mix_frame1, 0]
     facing_axis = R.from_quat(rot).apply(np.array([0, 0, 1])).flatten()[[0, 2]]
     new_motion = bvh_motion2.translation_and_rotation(0, pos, facing_axis)
+
+    # Inertialization Rotation
+    # rot_diff = (R.from_quat(new_motion.joint_rotation[0]) *
+    #            R.from_quat((bvh_motion1.joint_rotation[mix_frame1]).copy()).inv()).as_rotvec()
+    # avel0 = smooth_utils.quat_to_avel(new_motion.joint_rotation[0], 1/60)
+    # avel1 = smooth_utils.quat_to_avel(bvh_motion1.joint_rotation[mix_frame1], 1/60)
+    # avel_diff = avel0 - avel1
+    half_life = 0.5 * mix_time / new_motion.joint_rotation.shape[0]
+    # for i in range(mix_time):
+    #     offset = smooth_utils.decay_spring_implicit_damping_rot(rot_diff, avel_diff, half_life, i/60)
+    #     new_motion.joint_rotation[i] = (R.from_rotvec(offset[0]) *
+    #                                     R.from_quat(new_motion.joint_rotation[i])).as_quat()
+    
+    # Inertialization Position
+    pos_diff = new_motion.joint_position[0] - bvh_motion1.joint_position[mix_frame1]
+    vel_diff = pos_diff / 60
+
+    for i in range(mix_time):
+        offset = smooth_utils.decay_spring_implicit_damping_pos(pos_diff, vel_diff, half_life, i/60)
+        new_motion.joint_position[i] += offset[0]
 
     # 下面这种直接拼肯定是不行的(
     res.joint_position = np.concatenate([res.joint_position[:mix_frame1], new_motion.joint_position], axis=0)

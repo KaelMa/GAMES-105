@@ -201,33 +201,36 @@ class BVHMotion():
         pass
     
     #--------------------- 你的任务 -------------------- #
-    def get_nor(self, v):
+    @staticmethod
+    def get_nor(v):
         v[np.isnan(v)] = 0
         if v.any():
             return v / np.linalg.norm(v)
         else:
             return v
 
-    def get_rotation_from_two_vector(self, p1, p2, single_dimension=True):
+    @staticmethod
+    def get_rotation_from_two_vector(p1, p2, single_dimension=True):
         if p1.shape != p2.shape:
             raise ValueError("check shape!")
 
-        v1 = self.get_nor(p1)
-        v2 = self.get_nor(p2)
+        v1 = BVHMotion.get_nor(p1)
+        v2 = BVHMotion.get_nor(p2)
 
         if single_dimension:
             radian = np.arccos(np.clip(np.dot(v1, v2), -1, 1))
-            axis = self.get_nor(np.cross(v1, v2))
+            axis = BVHMotion.get_nor(np.cross(v1, v2))
             rot_array = radian*axis
         else:
             radian = [np.arccos(np.clip(np.dot(v1[i], v2[i]), -1, 1)) for i in range(v1.shape[0])]
-            axis = self.get_nor(np.cross(v1, v2))
+            axis = BVHMotion.get_nor(np.cross(v1, v2))
             rot_array = [radian[i] * axis[i] for i in range(len(radian))]
 
         rotation = R.from_rotvec(rot_array)
         return rotation
 
-    def decompose_rotation_with_yaxis(self, rotation, single_dimension=True):
+    @staticmethod
+    def decompose_rotation_with_yaxis(rotation, single_dimension=True):
         '''
         输入: rotation 形状为(4,)的ndarray, 四元数旋转
         输出: Ry, Rxz，分别为绕y轴的旋转和转轴在xz平面的旋转，并满足R = Ry * Rxz
@@ -238,7 +241,7 @@ class BVHMotion():
         y_axis = np.array([0, 1, 0])
         y_local = R.from_quat(rotation).apply(y_axis)
         y_vector = np.full(y_local.shape, y_axis)
-        d_r = self.get_rotation_from_two_vector(y_local, y_vector, single_dimension)
+        d_r = BVHMotion.get_rotation_from_two_vector(y_local, y_vector, single_dimension)
 
         r_y = d_r * R.from_quat(rotation)
         r_xz = r_y.inv() * R.from_quat(rotation)
@@ -269,9 +272,9 @@ class BVHMotion():
         # 你的代码
         target_face_direction = np.array([target_facing_direction_xz[0], 0, target_facing_direction_xz[1]])
         frame_rot = res.joint_rotation[frame_num, 0]
-        ry, _ = self.decompose_rotation_with_yaxis(frame_rot)
-        target_rot = self.get_rotation_from_two_vector(np.array([0, 0, 1]), target_face_direction)
-        r0_y, _ = self.decompose_rotation_with_yaxis(target_rot.as_quat())
+        ry, _ = BVHMotion.decompose_rotation_with_yaxis(frame_rot)
+        target_rot = BVHMotion.get_rotation_from_two_vector(np.array([0, 0, 1]), target_face_direction)
+        r0_y, _ = BVHMotion.decompose_rotation_with_yaxis(target_rot.as_quat())
 
         # new rotation
         delta_r = r0_y * ry.inv()

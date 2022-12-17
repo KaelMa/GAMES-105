@@ -1,20 +1,18 @@
 # 以下部分均为可更改部分
 
 from answer_task1 import *
+from scipy.spatial import KDTree
 
 class CharacterController():
     def __init__(self, controller) -> None:
-        # self.motions = [BVHMotion('motion_material/kinematic_motion/long_run.bvh'),
-        #                 BVHMotion('motion_material/kinematic_motion/long_run_mirror.bvh'),
-        #                 BVHMotion('motion_material/kinematic_motion/long_walk.bvh'),
-        #                 BVHMotion('motion_material/kinematic_motion/long_walk_mirror.bvh')]
-
         self.motions = [BVHMotion('motion_material/idle.bvh'),
                         BVHMotion('motion_material/run_forward.bvh'),
-                        BVHMotion('motion_material/walk_and_ture_right.bvh'),
-                        BVHMotion('motion_material/walk_and_turn_left.bvh'),
-                        BVHMotion('motion_material/walk_forward.bvh'),
-                        BVHMotion('motion_material/walkF.bvh')]
+                        # BVHMotion('motion_material/walk_and_ture_right.bvh'),
+                        # BVHMotion('motion_material/walk_and_turn_left.bvh'),
+                        # BVHMotion('motion_material/walk_forward.bvh'),
+                        # BVHMotion('motion_material/walkF.bvh')
+                        ]
+
         self.controller = controller
         self.cur_root_pos = None
         self.cur_root_rot = None
@@ -22,7 +20,7 @@ class CharacterController():
         self.cur_frame = 0
         self.cur_motion = 0
         self.dt = 1/60
-        self.db = None
+        self.cost_db = None
         self.init_db()
 
     def init_db(self):
@@ -31,85 +29,77 @@ class CharacterController():
         """
         motions_data = []
         for i in range(len(self.motions)):
-            motion_data = []
             cur_motion_position = self.motions[i].joint_position
             cur_motion_rotation = self.motions[i].joint_rotation
             frame_num = cur_motion_position.shape[0]
+            motion_data = np.empty((frame_num, 10))
+
             for j in range(frame_num - 1):
                 # root velocity, left/right joint local position and velocity
-                data = []
-                feature = []
-                root_vel = (cur_motion_position[j + 1][0] - cur_motion_position[j][0]) / self.dt
-                feature.append(root_vel)
 
-                l_foot_index = self.motions[i].joint_name.index('lToeJoint_end')
-                l_foot_pos = cur_motion_position[j][l_foot_index] - cur_motion_position[j][0]
-                l_foot_vel = ((cur_motion_position[j + 1][l_foot_index] - cur_motion_position[j + 1][0])
-                              - l_foot_pos) / self.dt
-                feature.append(l_foot_pos)
-                feature.append(l_foot_vel)
-
-                r_foot_index = self.motions[i].joint_name.index('rToeJoint_end')
-                r_foot_pos = cur_motion_position[j][r_foot_index] - cur_motion_position[j][0]
-                r_foot_vel = ((cur_motion_position[j + 1][r_foot_index] - cur_motion_position[j + 1][0])
-                              - r_foot_pos) / self.dt
-                feature.append(r_foot_pos)
-                feature.append(r_foot_vel)
-                data.append(feature)
+                # feature = []
+                # root_vel = (cur_motion_position[j + 1][0] - cur_motion_position[j][0]) / self.dt
+                # feature.append(root_vel)
+                #
+                # l_foot_index = self.motions[i].joint_name.index('lToeJoint_end')
+                # l_foot_pos = cur_motion_position[j][l_foot_index] - cur_motion_position[j][0]
+                # l_foot_vel = ((cur_motion_position[j + 1][l_foot_index] - cur_motion_position[j + 1][0])
+                #               - l_foot_pos) / self.dt
+                # feature.append(l_foot_pos)
+                # feature.append(l_foot_vel)
+                #
+                # r_foot_index = self.motions[i].joint_name.index('rToeJoint_end')
+                # r_foot_pos = cur_motion_position[j][r_foot_index] - cur_motion_position[j][0]
+                # r_foot_vel = ((cur_motion_position[j + 1][r_foot_index] - cur_motion_position[j + 1][0])
+                #               - r_foot_pos) / self.dt
+                # feature.append(r_foot_pos)
+                # feature.append(r_foot_vel)
+                # data.append(feature)
 
                 # trajectory in 20 40 60 80 100 frame
-                traj = []
-                t1 = cur_motion_position[min(j + 20, frame_num - 1)][0] - cur_motion_position[j][0]
-                t2 = cur_motion_position[min(j + 40, frame_num - 1)][0] - cur_motion_position[j][0]
-                t3 = cur_motion_position[min(j + 60, frame_num - 1)][0] - cur_motion_position[j][0]
-                t4 = cur_motion_position[min(j + 80, frame_num - 1)][0] - cur_motion_position[j][0]
-                t5 = cur_motion_position[min(j + 100, frame_num - 1)][0] - cur_motion_position[j][0]
-                traj.append(t1)
-                traj.append(t2)
-                traj.append(t3)
-                traj.append(t4)
-                traj.append(t5)
+                motion_data[j, 0] = np.linalg.norm(cur_motion_position[min(j + 20, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
+                motion_data[j, 1] = np.linalg.norm(cur_motion_position[min(j + 40, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
+                motion_data[j, 2] = np.linalg.norm(cur_motion_position[min(j + 60, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
+                motion_data[j, 3] = np.linalg.norm(cur_motion_position[min(j + 80, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
+                motion_data[j, 4] = np.linalg.norm(cur_motion_position[min(j + 100, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
 
-                root_rot_inv = R.from_quat(cur_motion_rotation[j][0]).inv()
-                r1 = R.from_quat(cur_motion_rotation[min(j + 20, frame_num - 1)][0]) * root_rot_inv
-                r2 = R.from_quat(cur_motion_rotation[min(j + 40, frame_num - 1)][0]) * root_rot_inv
-                r3 = R.from_quat(cur_motion_rotation[min(j + 60, frame_num - 1)][0]) * root_rot_inv
-                r4 = R.from_quat(cur_motion_rotation[min(j + 80, frame_num - 1)][0]) * root_rot_inv
-                r5 = R.from_quat(cur_motion_rotation[min(j + 100, frame_num - 1)][0]) * root_rot_inv
-                traj.append(r1)
-                traj.append(r2)
-                traj.append(r3)
-                traj.append(r4)
-                traj.append(r5)
+                motion_data[j, 5] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 20, frame_num - 1)][0], cur_motion_rotation[j][0])
+                motion_data[j, 6] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 40, frame_num - 1)][0], cur_motion_rotation[j][0])
+                motion_data[j, 7] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 60, frame_num - 1)][0], cur_motion_rotation[j][0])
+                motion_data[j, 8] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 80, frame_num - 1)][0], cur_motion_rotation[j][0])
+                motion_data[j, 9] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 100, frame_num - 1)][0], cur_motion_rotation[j][0])
 
-                data.append(traj)
-                motion_data.append(data)
-            motions_data.append(motion_data)
+            tree = KDTree(motion_data, copy_data = True)
+            motions_data.append(tree)
 
-        self.db = motions_data
+        self.cost_db = motions_data
         print("init feature cost db done")
+
+    @staticmethod
+    def find_diff_y_axis(rot1, rot2):
+        """
+        rot1与rot2关于Y轴旋转角度差异
+        """
+        r1_y, _ = BVHMotion.decompose_rotation_with_yaxis(rot1)
+        r2_y, _ = BVHMotion.decompose_rotation_with_yaxis(rot2)
+
+        diff = (r1_y * r2_y.inv()).as_rotvec()
+        return np.linalg.norm(diff)
+
+    @staticmethod
+    def find_diff_pos_xz(pos1, pos2):
+        return np.linalg.norm(pos1[0, 2], pos2[0, 2])
 
     def compute_future_cost(self, feature):
         min_cost = 1e5
         best_frame = None
 
-        for i in range(len(self.db)):
-            for j in range(len(self.db[i])):
-                c0 = np.linalg.norm(feature[0] - self.db[i][j][1][0])
-                c1 = np.linalg.norm(feature[1] - self.db[i][j][1][1])
-                c2 = np.linalg.norm(feature[2] - self.db[i][j][1][2])
-                c3 = np.linalg.norm(feature[3] - self.db[i][j][1][3])
-                c4 = np.linalg.norm(feature[4] - self.db[i][j][1][4])
-
-                c5 = np.linalg.norm((feature[5] * self.db[i][j][1][5].inv()).as_rotvec())
-                c6 = np.linalg.norm((feature[6] * self.db[i][j][1][6].inv()).as_rotvec())
-                c7 = np.linalg.norm((feature[7] * self.db[i][j][1][7].inv()).as_rotvec())
-                c8 = np.linalg.norm((feature[8] * self.db[i][j][1][8].inv()).as_rotvec())
-                c9 = np.linalg.norm((feature[9] * self.db[i][j][1][9].inv()).as_rotvec())
-                t = sum([c0, c1, c2, c3, c4, c5, c6, c7, c8, c9])
-                if t <= min_cost:
-                    min_cost = t
-                    best_frame = (i, j)
+        for i in range(len(self.cost_db)):
+            tree = self.cost_db[i]
+            dist, idx = tree.query(feature, p = 1)
+            if dist <= min_cost:
+                min_cost = dist
+                best_frame = (i, idx)
         return best_frame
 
     def update_state(self, 
@@ -140,31 +130,29 @@ class CharacterController():
         '''
 
         # solved by motion matching
-        self.cur_pose_feature = self.db[0][0]
-        feature = None
-        t1 = desired_pos_list[1] - desired_pos_list[0]
-        t2 = desired_pos_list[2] - desired_pos_list[0]
-        t3 = desired_pos_list[3] - desired_pos_list[0]
-        t4 = desired_pos_list[4] - desired_pos_list[0]
-        t5 = desired_pos_list[5] - desired_pos_list[0]
+        # computer feature vector
+        t1 = np.linalg.norm(desired_pos_list[1, [0, 2]] - desired_pos_list[0, [0, 2]])
+        t2 = np.linalg.norm(desired_pos_list[2, [0, 2]] - desired_pos_list[0, [0, 2]])
+        t3 = np.linalg.norm(desired_pos_list[3, [0, 2]] - desired_pos_list[0, [0, 2]])
+        t4 = np.linalg.norm(desired_pos_list[4, [0, 2]] - desired_pos_list[0, [0, 2]])
+        t5 = np.linalg.norm(desired_pos_list[5, [0, 2]] - desired_pos_list[0, [0, 2]])
 
-        r0 = R.from_quat(desired_rot_list[0]).inv()
-        r1 = R.from_quat(desired_rot_list[1]) * r0
-        r2 = R.from_quat(desired_rot_list[2]) * r0
-        r3 = R.from_quat(desired_rot_list[3]) * r0
-        r4 = R.from_quat(desired_rot_list[4]) * r0
-        r5 = R.from_quat(desired_rot_list[5]) * r0
+        r1 = CharacterController.find_diff_y_axis(desired_rot_list[1], desired_rot_list[0])
+        r2 = CharacterController.find_diff_y_axis(desired_rot_list[2], desired_rot_list[0])
+        r3 = CharacterController.find_diff_y_axis(desired_rot_list[3], desired_rot_list[0])
+        r4 = CharacterController.find_diff_y_axis(desired_rot_list[4], desired_rot_list[0])
+        r5 = CharacterController.find_diff_y_axis(desired_rot_list[5], desired_rot_list[0])
         feature = [t1, t2, t3, t4, t5, r1, r2, r3, r4, r5]
 
         best_frame = self.compute_future_cost(feature)
+
         if self.cur_motion == best_frame[0] and self.cur_frame == best_frame[1]:
-            self.cur_motion = (self.cur_motion + 1) % len(self.motions)
-            self.cur_frame = (self.cur_frame + 1) % self.motions[self.cur_motion].motion_length
+            self.cur_frame = min(self.cur_frame + 1, self.motions[self.cur_motion].motion_length - 1)
         else:
             self.cur_motion = best_frame[0]
             self.cur_frame = best_frame[1]
 
-        print("best frame: ", best_frame)
+        print("best frame: {%d, %d}, cur frame: {%d, %d}" % (best_frame[0], best_frame[1], self.cur_motion, self.cur_frame))
 
         joint_name = self.motions[self.cur_motion].joint_name
         joint_translation, joint_orientation = self.motions[self.cur_motion].batch_forward_kinematics()

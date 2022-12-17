@@ -201,6 +201,34 @@ class BVHMotion():
         pass
     
     #--------------------- 你的任务 -------------------- #
+
+    def forward_kinematics(self, cur_frame=0, joint_position=None, joint_rotation=None):
+        '''
+        利用自身的metadata进行批量前向运动学
+        joint_position: (N,M,3)的ndarray, 局部平移
+        joint_rotation: (N,M,4)的ndarray, 用四元数表示的局部旋转
+        '''
+        if joint_position is None:
+            joint_position = self.joint_position[cur_frame]
+        if joint_rotation is None:
+            joint_rotation = self.joint_rotation[cur_frame]
+
+        joint_translation = np.zeros_like(joint_position)
+        joint_orientation = np.zeros_like(joint_rotation)
+        joint_orientation[:, 3] = 1.0  # 四元数的w分量默认为1
+
+        # 一个小hack是root joint的parent是-1, 对应最后一个关节
+        # 计算根节点时最后一个关节还未被计算，刚好是0偏移和单位朝向
+
+        for i in range(len(self.joint_name)):
+            pi = self.joint_parent[i]
+            parent_orientation = R.from_quat(joint_orientation[pi, :])
+            joint_translation[i, :] = joint_translation[pi, :] + \
+                                         parent_orientation.apply(joint_position[i, :])
+            joint_orientation[i, :] = (parent_orientation * R.from_quat(joint_rotation[i, :])).as_quat()
+        return joint_translation, joint_orientation
+
+
     @staticmethod
     def get_nor(v):
         v[np.isnan(v)] = 0

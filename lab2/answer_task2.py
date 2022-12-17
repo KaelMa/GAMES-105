@@ -5,12 +5,9 @@ from scipy.spatial import KDTree
 
 class CharacterController():
     def __init__(self, controller) -> None:
-        self.motions = [BVHMotion('motion_material/idle.bvh'),
-                        BVHMotion('motion_material/run_forward.bvh'),
-                        # BVHMotion('motion_material/walk_and_ture_right.bvh'),
-                        # BVHMotion('motion_material/walk_and_turn_left.bvh'),
-                        # BVHMotion('motion_material/walk_forward.bvh'),
-                        # BVHMotion('motion_material/walkF.bvh')
+        self.motions = [
+                        BVHMotion('motion_material/kinematic_motion/long_walk.bvh'),
+                        BVHMotion('motion_material/kinematic_motion/long_walk_mirror.bvh'),
                         ]
 
         self.controller = controller
@@ -19,6 +16,8 @@ class CharacterController():
         self.cur_pose_feature = None
         self.cur_frame = 0
         self.cur_motion = 0
+        self.last_best = None
+        self.frame_count = 0
         self.dt = 1/60
         self.cost_db = None
         self.init_db()
@@ -32,42 +31,41 @@ class CharacterController():
             cur_motion_position = self.motions[i].joint_position
             cur_motion_rotation = self.motions[i].joint_rotation
             frame_num = cur_motion_position.shape[0]
-            motion_data = np.empty((frame_num, 10))
+            motion_data = np.empty((frame_num, 20))
 
             for j in range(frame_num - 1):
-                # root velocity, left/right joint local position and velocity
-
-                # feature = []
-                # root_vel = (cur_motion_position[j + 1][0] - cur_motion_position[j][0]) / self.dt
-                # feature.append(root_vel)
-                #
-                # l_foot_index = self.motions[i].joint_name.index('lToeJoint_end')
-                # l_foot_pos = cur_motion_position[j][l_foot_index] - cur_motion_position[j][0]
-                # l_foot_vel = ((cur_motion_position[j + 1][l_foot_index] - cur_motion_position[j + 1][0])
-                #               - l_foot_pos) / self.dt
-                # feature.append(l_foot_pos)
-                # feature.append(l_foot_vel)
-                #
-                # r_foot_index = self.motions[i].joint_name.index('rToeJoint_end')
-                # r_foot_pos = cur_motion_position[j][r_foot_index] - cur_motion_position[j][0]
-                # r_foot_vel = ((cur_motion_position[j + 1][r_foot_index] - cur_motion_position[j + 1][0])
-                #               - r_foot_pos) / self.dt
-                # feature.append(r_foot_pos)
-                # feature.append(r_foot_vel)
-                # data.append(feature)
+                # root velocity, left/right joint local position and velocity, skip for now
 
                 # trajectory in 20 40 60 80 100 frame
+                # root position
                 motion_data[j, 0] = np.linalg.norm(cur_motion_position[min(j + 20, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
                 motion_data[j, 1] = np.linalg.norm(cur_motion_position[min(j + 40, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
                 motion_data[j, 2] = np.linalg.norm(cur_motion_position[min(j + 60, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
                 motion_data[j, 3] = np.linalg.norm(cur_motion_position[min(j + 80, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
                 motion_data[j, 4] = np.linalg.norm(cur_motion_position[min(j + 100, frame_num - 1), 0, [0, 2]] - cur_motion_position[j, 0, [0, 2]])
-
-                motion_data[j, 5] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 20, frame_num - 1)][0], cur_motion_rotation[j][0])
-                motion_data[j, 6] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 40, frame_num - 1)][0], cur_motion_rotation[j][0])
-                motion_data[j, 7] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 60, frame_num - 1)][0], cur_motion_rotation[j][0])
-                motion_data[j, 8] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 80, frame_num - 1)][0], cur_motion_rotation[j][0])
-                motion_data[j, 9] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 100, frame_num - 1)][0], cur_motion_rotation[j][0])
+                # root velocity
+                motion_data[j, 5] = np.linalg.norm((cur_motion_position[min(j + 20, frame_num - 1), 0, [0, 2]] -
+                                                   cur_motion_position[min(j + 19, frame_num - 1), 0, [0, 2]]) / 60)
+                motion_data[j, 6] = np.linalg.norm((cur_motion_position[min(j + 40, frame_num - 1), 0, [0, 2]] -
+                                                   cur_motion_position[min(j + 39, frame_num - 1), 0, [0, 2]]) / 60)
+                motion_data[j, 7] = np.linalg.norm((cur_motion_position[min(j + 60, frame_num - 1), 0, [0, 2]] -
+                                                   cur_motion_position[min(j + 59, frame_num - 1), 0, [0, 2]]) / 60)
+                motion_data[j, 8] = np.linalg.norm((cur_motion_position[min(j + 80, frame_num - 1), 0, [0, 2]] -
+                                                   cur_motion_position[min(j + 79, frame_num - 1), 0, [0, 2]]) / 60)
+                motion_data[j, 9] = np.linalg.norm((cur_motion_position[min(j + 100, frame_num - 1), 0, [0, 2]] -
+                                                   cur_motion_position[min(j + 99, frame_num - 1), 0, [0, 2]]) / 60)
+                # root rotation
+                motion_data[j, 10] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 20, frame_num - 1)][0], cur_motion_rotation[j][0])
+                motion_data[j, 11] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 40, frame_num - 1)][0], cur_motion_rotation[j][0])
+                motion_data[j, 12] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 60, frame_num - 1)][0], cur_motion_rotation[j][0])
+                motion_data[j, 13] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 80, frame_num - 1)][0], cur_motion_rotation[j][0])
+                motion_data[j, 14] = CharacterController.find_diff_y_axis(cur_motion_rotation[min(j + 100, frame_num - 1)][0], cur_motion_rotation[j][0])
+                # root angle velocity
+                motion_data[j, 15] = np.linalg.norm(smooth_utils.quat_to_avel(cur_motion_rotation[min(j + 20, frame_num - 1) - 2: min(j + 20, frame_num - 1), 0], 1 / 60))
+                motion_data[j, 16] = np.linalg.norm(smooth_utils.quat_to_avel(cur_motion_rotation[min(j + 40, frame_num - 1) - 2: min(j + 40, frame_num - 1), 0], 1 / 60))
+                motion_data[j, 17] = np.linalg.norm(smooth_utils.quat_to_avel(cur_motion_rotation[min(j + 60, frame_num - 1) - 2: min(j + 60, frame_num - 1), 0], 1 / 60))
+                motion_data[j, 18] = np.linalg.norm(smooth_utils.quat_to_avel(cur_motion_rotation[min(j + 80, frame_num - 1) - 2: min(j + 80, frame_num - 1), 0], 1 / 60))
+                motion_data[j, 19] = np.linalg.norm(smooth_utils.quat_to_avel(cur_motion_rotation[min(j + 100, frame_num - 1) - 2: min(j + 100, frame_num - 1), 0], 1 / 60))
 
             tree = KDTree(motion_data, copy_data = True)
             motions_data.append(tree)
@@ -91,6 +89,8 @@ class CharacterController():
         return np.linalg.norm(pos1[0, 2], pos2[0, 2])
 
     def compute_future_cost(self, feature):
+        print("feature:", feature)
+
         min_cost = 1e5
         best_frame = None
 
@@ -100,7 +100,35 @@ class CharacterController():
             if dist <= min_cost:
                 min_cost = dist
                 best_frame = (i, idx)
+        print("min_cost: ", min_cost)
         return best_frame
+
+    def cal_cur_feature_vector(self, desired_avel_list, desired_pos_list, desired_rot_list, desired_vel_list):
+        t1 = np.linalg.norm(desired_pos_list[1, [0, 2]] - desired_pos_list[0, [0, 2]])
+        t2 = np.linalg.norm(desired_pos_list[2, [0, 2]] - desired_pos_list[0, [0, 2]])
+        t3 = np.linalg.norm(desired_pos_list[3, [0, 2]] - desired_pos_list[0, [0, 2]])
+        t4 = np.linalg.norm(desired_pos_list[4, [0, 2]] - desired_pos_list[0, [0, 2]])
+        t5 = np.linalg.norm(desired_pos_list[5, [0, 2]] - desired_pos_list[0, [0, 2]])
+
+        v1 = np.linalg.norm(desired_vel_list[1])
+        v2 = np.linalg.norm(desired_vel_list[2])
+        v3 = np.linalg.norm(desired_vel_list[3])
+        v4 = np.linalg.norm(desired_vel_list[4])
+        v5 = np.linalg.norm(desired_vel_list[5])
+
+        r1 = CharacterController.find_diff_y_axis(desired_rot_list[1], desired_rot_list[0])
+        r2 = CharacterController.find_diff_y_axis(desired_rot_list[2], desired_rot_list[0])
+        r3 = CharacterController.find_diff_y_axis(desired_rot_list[3], desired_rot_list[0])
+        r4 = CharacterController.find_diff_y_axis(desired_rot_list[4], desired_rot_list[0])
+        r5 = CharacterController.find_diff_y_axis(desired_rot_list[5], desired_rot_list[0])
+
+        a1 = np.linalg.norm(desired_avel_list[1])
+        a2 = np.linalg.norm(desired_avel_list[2])
+        a3 = np.linalg.norm(desired_avel_list[3])
+        a4 = np.linalg.norm(desired_avel_list[4])
+        a5 = np.linalg.norm(desired_avel_list[5])
+        feature = [t1, t2, t3, t4, t5, v1, v2, v3, v4, v5, r1, r2, r3, r4, r5, a1, a2, a3, a4, a5]
+        return feature
 
     def update_state(self, 
                      desired_pos_list, 
@@ -130,41 +158,34 @@ class CharacterController():
         '''
 
         # solved by motion matching
-        # computer feature vector
-        t1 = np.linalg.norm(desired_pos_list[1, [0, 2]] - desired_pos_list[0, [0, 2]])
-        t2 = np.linalg.norm(desired_pos_list[2, [0, 2]] - desired_pos_list[0, [0, 2]])
-        t3 = np.linalg.norm(desired_pos_list[3, [0, 2]] - desired_pos_list[0, [0, 2]])
-        t4 = np.linalg.norm(desired_pos_list[4, [0, 2]] - desired_pos_list[0, [0, 2]])
-        t5 = np.linalg.norm(desired_pos_list[5, [0, 2]] - desired_pos_list[0, [0, 2]])
-
-        r1 = CharacterController.find_diff_y_axis(desired_rot_list[1], desired_rot_list[0])
-        r2 = CharacterController.find_diff_y_axis(desired_rot_list[2], desired_rot_list[0])
-        r3 = CharacterController.find_diff_y_axis(desired_rot_list[3], desired_rot_list[0])
-        r4 = CharacterController.find_diff_y_axis(desired_rot_list[4], desired_rot_list[0])
-        r5 = CharacterController.find_diff_y_axis(desired_rot_list[5], desired_rot_list[0])
-        feature = [t1, t2, t3, t4, t5, r1, r2, r3, r4, r5]
-
-        best_frame = self.compute_future_cost(feature)
-
-        if self.cur_motion == best_frame[0] and self.cur_frame == best_frame[1]:
-            self.cur_frame = min(self.cur_frame + 1, self.motions[self.cur_motion].motion_length - 1)
+        if self.frame_count < 0:
+            self.cur_frame = (self.cur_frame + 1) % (self.motions[self.cur_motion].motion_length - 1)
+            print("skip frame")
         else:
-            self.cur_motion = best_frame[0]
-            self.cur_frame = best_frame[1]
+            # computer feature vector
+            feature = self.cal_cur_feature_vector(desired_avel_list, desired_pos_list, desired_rot_list, desired_vel_list)
 
-        print("best frame: {%d, %d}, cur frame: {%d, %d}" % (best_frame[0], best_frame[1], self.cur_motion, self.cur_frame))
+            best_frame = self.compute_future_cost(feature)
+
+            if self.last_best == best_frame:
+                self.cur_motion = best_frame[0]
+                self.cur_frame = (self.cur_frame + 1) % (self.motions[self.cur_motion].motion_length - 1)
+            else:
+                self.cur_motion = best_frame[0]
+                self.cur_frame = best_frame[1]
+            self.last_best = best_frame
+            self.frame_count = 0
+            print("best frame: {%d, %d}, cur frame: {%d, %d}" % (best_frame[0], best_frame[1], self.cur_motion, self.cur_frame))
 
         joint_name = self.motions[self.cur_motion].joint_name
-        joint_translation, joint_orientation = self.motions[self.cur_motion].batch_forward_kinematics()
-        joint_translation = joint_translation[self.cur_frame]
-        joint_orientation = joint_orientation[self.cur_frame]
+        joint_translation, joint_orientation = self.motions[self.cur_motion].forward_kinematics(self.cur_frame)
 
         self.cur_root_pos = joint_translation[0]
         self.cur_root_rot = joint_orientation[0]
+        self.frame_count += 1
 
         return joint_name, joint_translation, joint_orientation
-    
-    
+
     def sync_controller_and_character(self, controller, character_state):
         '''
         这一部分用于同步你的角色和手柄的状态

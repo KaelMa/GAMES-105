@@ -18,5 +18,23 @@ def skinning(joint_translation, joint_orientation, T_pose_joint_translation, T_p
     vertex_translation = T_pose_vertex_translation.copy()
     
     #---------------你的代码------------------#
-    
+    vertex_num = vertex_translation.shape[0]
+    for i in range(vertex_num):
+        vertex_trans = np.zeros(vertex_translation.shape[1])
+        for j in range(4):
+            if skinning_weight[i, j] <= 1e-5:
+                continue
+
+            # 当前顶点对应的骨骼
+            skin_id = skinning_idx[i, j]
+            # Bind Pose下的局部坐标
+            local_r = T_pose_vertex_translation[i] - T_pose_joint_translation[skin_id]
+            # 当前位置
+            cur_r = R.from_quat(joint_orientation[skin_id]).apply(local_r) + joint_translation[skin_id]
+
+            # LBS加权平均
+            vertex_trans += skinning_weight[i, j] * cur_r
+
+        vertex_translation[i] = vertex_trans
+
     return vertex_translation
